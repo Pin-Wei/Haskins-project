@@ -7,6 +7,7 @@ __scripts_from_the_others
 *Stats*/*
 SC_matrices/*
 Wiki_corpus/*
+torchtext_vocab
 *1000000-small*
 *.lnk*
 .ipynb_checkpoints
