@@ -1,3 +1,14 @@
+
+__ARCHIVE
+__scripts_from_the_others
+
+*Data*/*
+*Figs*/*
+*Stats*/*
+*.lnk*
+.ipynb_checkpoints
+.gitignore
+
 # History files
 .Rhistory
 .Rapp.history
