@@ -24,7 +24,9 @@ dv <- "z_rt"
 
 var_list <- c("LogCF", "NS", "CON", "PC", "SAR", "IMG", "SC", "AoA")
 
-server <- c("local", "remote")[2]
+server <- c("local", "remote")[
+  as.integer(readline("Local [1] or remote [2]: "))
+]
 
 ## Setup directories -----------------------------------------------------------
 
@@ -81,6 +83,7 @@ writeLines(
   c(
     capture.output(summary(mdl)), 
     capture.output(MuMIn::r.squaredGLMM(mdl)), 
+    "", 
     paste("AIC:", stats::AIC(mdl)), 
     paste("BIC:", stats::BIC(mdl))
   ), 
