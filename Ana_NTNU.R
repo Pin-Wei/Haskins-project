@@ -90,12 +90,11 @@ print(str(DF))
 
 ## Loop for subjects in different grade ----------------------------------------
 
-# sub.DF <- DF
-affix <- " (Overall)"
+# affix <- " (Overall)"
 
-# for ( gd in seq(1, 6) ) {
+for ( gd in seq(1, 6) ) {
   
-  # affix <- paste0(" (G-", gd, ") ")
+  affix <- paste0(" (G-", gd, ") ")
   
   # out.txt <- file.path(out.stats, paste0(
   #   prefix, paste(fixed.eff, collapse = " × "), affix, ".txt"))
@@ -109,7 +108,7 @@ affix <- " (Overall)"
   ## Step-1. Select data and perform z-scoring ---------------------------------
   
   sub.DF <- DF %>% 
-    # subset(Grade == gd) %>% 
+    subset(Grade == gd) %>%
     group_by(SID) %>% 
     dplyr::mutate(across(
       .cols = all_of(fixed.eff),
@@ -200,4 +199,4 @@ affix <- " (Overall)"
     "[", mdl.type, "] ", 
     paste(fixed.eff, collapse = " × "), affix, 
     ".xlsx")), overwrite = TRUE)
-# }
+}

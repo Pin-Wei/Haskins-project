@@ -5,9 +5,11 @@ __scripts_from_the_others
 *Data*/*
 *Figs*/*
 *Stats*/*
+SC_matrices/*
+Wiki_corpus/*
+*1000000-small*
 *.lnk*
 .ipynb_checkpoints
-.gitignore
 
 # History files
 .Rhistory

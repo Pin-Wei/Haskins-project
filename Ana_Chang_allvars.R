@@ -10,6 +10,7 @@ library(lmerTest)
 library(stargazer)
 library(jtools)
 library(car)
+library(stats)
 library(openxlsx)
 library(MuMIn)
 
@@ -76,8 +77,15 @@ if ( mdl.type == "GLM" ) {
 saveRDS(mdl, file = file.path(stats.outdir, 
                               paste0(mdl.type, ".rds")))
 
-writeLines(capture.output(summary(mdl)), 
-           con = file.path(stats.outdir, stats.out.fn))
+writeLines(
+  c(
+    capture.output(summary(mdl)), 
+    capture.output(MuMIn::r.squaredGLMM(mdl)), 
+    paste("AIC:", stats::AIC(mdl)), 
+    paste("BIC:", stats::BIC(mdl))
+  ), 
+  con = file.path(stats.outdir, stats.out.fn)
+)
 
 # writeLines(capture.output(jtools::summ(mdl, vifs = TRUE)), 
 #            con = file.path(stats.outdir, 
@@ -96,4 +104,3 @@ openxlsx::saveWorkbook(wb,
                        file.path(stats.outdir, gsub(".txt", ".xlsx", stats.out.fn)), 
                        overwrite = TRUE)
 
-MuMIn::r.squaredGLMM(mdl) 
