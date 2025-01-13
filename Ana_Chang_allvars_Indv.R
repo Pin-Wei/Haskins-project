@@ -53,6 +53,8 @@ ana.data <- readxl::read_excel(data.path) %>%
 formula <- as.formula(paste(
   dv, "~", paste(var_list, collapse = " + ")))
 
+print(unique(ana.data$subject_id))
+
 results <- ana.data %>% 
   split(
     ., ana.data$subject_id) %>% 
