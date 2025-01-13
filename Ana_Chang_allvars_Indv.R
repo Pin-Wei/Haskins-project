@@ -58,12 +58,16 @@ results <- ana.data %>%
     ., ana.data$subject_id) %>% 
   lapply(., function(x) {
     mdl <- lm(formula, data = x)
+    coefs <- mdl$coefficients
     rsq <- MuMIn::r.squaredGLMM(mdl)
-    indv.df <- data.frame(
-      R2m = rsq[1],
-      R2c = rsq[2],
-      AIC = stats::AIC(mdl), 
-      BIC = stats::BIC(mdl)
+    indv.df <- cbind(
+      t(as.data.frame(coefs)), 
+      data.frame(
+        R2m = rsq[1],
+        R2c = rsq[2],
+        AIC = stats::AIC(mdl), 
+        BIC = stats::BIC(mdl)
+      )
     )
     return(indv.df)
   }) %>% 
@@ -77,7 +81,10 @@ subj.list <- ana.data %>%
 results$SID <- subj.list
 
 write.csv(
-  results[, c("SID", "R2m", "R2c", "AIC", "BIC")], 
+  results[, c(
+    "SID", "(Intercept)", var_list, 
+    "R2m", "R2c", "AIC", "BIC"
+  )], 
   file = file.path(stats.outdir, paste0(
     "[", task.type, "] all 8 variables using Indv data (GLM).csv")), 
   row.names = F
