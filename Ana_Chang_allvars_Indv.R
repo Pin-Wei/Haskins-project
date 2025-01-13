@@ -16,17 +16,19 @@ library(MuMIn)
 
 ## Variables -------------------------------------------------------------------
 
+server <- c("local", "remote")[
+  as.integer(readline("Local [1] or remote [2]: "))
+]
+
 task.type <- c("Naming", "LD")[1]
 
-mdl.type <- c("GLM", "GLMM")[2]
+mdl.type <- c("GLM", "CSR")[
+  as.integer(readline("GLM [1] or CSR [2]: "))
+]
 
 dv <- "z_rt"
 
 var_list <- c("LogCF", "NS", "CON", "PC", "SAR", "IMG", "SC", "AoA")
-
-server <- c("local", "remote")[
-  as.integer(readline("Local [1] or remote [2]: "))
-]
 
 ## Setup directories -----------------------------------------------------------
 
@@ -50,10 +52,23 @@ if ( ! file.exists(stats.outdir)) {
 ana.data <- readxl::read_excel(data.path) %>% 
   subset(task == task.type)
 
-formula <- as.formula(paste(
-  dv, "~", paste(var_list, collapse = " + ")))
-
-print(unique(ana.data$subject_id))
+if ( mdl.type == "GLM" ) {
+  formula <- as.formula(paste(
+    dv, "~", paste(var_list, collapse = " + ")))
+  
+} else if ( mdl.type == "CSR" ) {
+  formula <- as.formula(paste(
+    dv, "~", 
+    paste(var_list, 
+          collapse = " + "), # linear terms
+    "+", 
+    paste0("I(", var_list, "^2)", 
+           collapse = " + "), # quadratic terms
+    "+", 
+    paste(combn(var_list, 2, function(x) paste(x, collapse = " * ")), 
+          collapse = " + ") # interaction terms
+  ))
+}
 
 results <- ana.data %>% 
   split(
@@ -65,9 +80,13 @@ results <- ana.data %>%
     indv.df <- cbind(
       t(as.data.frame(coefs)), 
       data.frame(
+        # nP = length(coef(mdl)), 
+        # nT = nobs(mdl), 
+        LogLik = logLik(mdl), 
         R2m = rsq[1],
         R2c = rsq[2],
         AIC = stats::AIC(mdl), 
+        AICc = MuMIn::AICc(mdl), 
         BIC = stats::BIC(mdl)
       )
     )
@@ -84,10 +103,13 @@ results$SID <- subj.list
 
 write.csv(
   results[, c(
-    "SID", "(Intercept)", var_list, 
-    "R2m", "R2c", "AIC", "BIC"
+    "SID", # "nP", "nT", 
+    "(Intercept)", var_list, 
+    "LogLik", "R2m", "R2c", "AIC", "AICc", "BIC"
   )], 
   file = file.path(stats.outdir, paste0(
-    "[", task.type, "] all 8 variables using Indv data (GLM).csv")), 
+    "[", task.type, 
+    "] all 8 variables using Indv data (", 
+    mdl.type, ").csv")), 
   row.names = F
 )
