@@ -32,14 +32,14 @@ cols_of_interest <- c(
   "AoA"
 )
 
-for ( task in c("LD", "Naming") ) {
+for ( tt in c("LD", "Naming") ) {
   
-  out.dir <- file.path(out.top, task)
+  out.dir <- file.path(out.top, tt)
   if ( ! file.exists(out.dir) ) { 
     dir.create(out.dir, recursive=TRUE) }
   
   sub.DF <- DF %>% 
-    subset(task == task)
+    subset(task == tt)
   
   for ( sid in sub.DF$subject_id ) {
     
