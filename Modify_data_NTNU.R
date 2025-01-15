@@ -1,153 +1,31 @@
+#!/usr/bin/env Rscript
+
 rm(list = ls())
 
 library(readxl)
 library(dplyr)
 library(tidyr) 
 library(reshape2)
+library(purrr)
 library(writexl)
 
-## Top -------------------------------------------------------------------------
-setwd("C:/Users/PinWei/my_Haskins_project/")
+## Variables -------------------------------------------------------------------
 
-top.dir           <- file.path("Data", "NTNU")
-data.path         <- file.path(top.dir, "RawTable_cleaned.xlsx")
-output.all.path   <- file.path(top.dir, "Data_all.RData")
-output.clean.path <- file.path(top.dir, "Data_clean.RData")
+server <- c("local", "remote")[
+  as.integer(readline("Local [1] or remote [2]: "))
+]
 
-DF.wide <- readxl::read_excel(data.path) %>% 
-  dplyr::mutate(
-    Sex = ifelse(Sex == 1, "F", "M")) %>% 
-  subset(
-    Screen == 1) %>% 
-  subset(
-    select = -c(Screen, `著...828`, `著...1974`)) 
-
-DF <- DF.wide %>% 
-  reshape2::melt(
-    id = c("SID", "Grade", "Sex", "Age_month", "Score"), 
-    variable.name = "Char", 
-    value.name = "Correct") %>% 
-  dplyr::mutate(
-    dplyr::across( 
-      .cols = all_of(c("Grade", "Sex", "Correct")),
-      .fns  = as.factor))
-
-DF$Char <- as.character(DF$Char)
-
-# ## Add (my) family semantic consistency metrics --------------------------------
-# 
-# for ( sc.ver in c("w2v", "GloVe", "DSG") ) {
-#   
-#   DF_temp <- readxl::read_excel(
-#     file.path("Data", paste0("char_consistency_metrics_", 
-#                              sc.ver, ".xlsx")))
-#   
-#   sc_renamed <- paste0("OSC.", sc.ver)
-#   colnames(DF_temp)[colnames(DF_temp) == "Se.Sim.Mean"] <- sc_renamed
-#   
-#   sel_SC_cols <- c("Char", sc_renamed)
-#   DF_temp <- subset(DF_temp, select = sel_SC_cols)
-#   
-#   DF <- merge(
-#     x = DF, y = DF_temp, by = "Char", all.x = TRUE)
-#   
-#   rm(DF_temp)
-# }
-# 
-## Add family semantic consistency metrics -- Hsieh et al. (2024) --------------
-
-DF_temp <- read.csv(
-  file.path("Data", "Hsieh_family_semantic_consistency.csv"))
-  ### 5675 char
-
-sel_Hsieh_cols <- c(
+cols.from.Hsieh <- c(
   "Char", "OS.Con.type", "OS.Con.token")
 
-DF_temp <- DF_temp %>%
-  dplyr::rename(
-    Char         = character,
-    OS.Con.type  = cons_type_PG,
-    OS.Con.token = cons_token_PG
-  ) %>%
-  subset(select = sel_Hsieh_cols)
-
-DF <- merge(
-  x = DF, y = DF_temp, by = "Char", all.x = TRUE)
-  ### 3099 char overlap
-
-rm(DF_temp)
-
-## Add features of single characters -- Chang et al. (2016) --------------------
-
-DF_temp <- read.csv(
-  file.path("Data", "Chang_et_al", "Chang_Lee_2016.csv"))
-  ### 3314 char
-
-sel_Chang_cols <- c(
+cols.from.Chang <- c(
   "Char", "Freq", "OP.Con.type", "OP.Con.token", 
   "REG", "NS", "HD", "Fami", "SAR")
 
-DF_temp <- DF_temp %>% 
-  dplyr::rename(
-    Char         = Character, 
-    Freq         = Frequency, 
-    OP.Con.type  = `Consistency..type.`, 
-    OP.Con.token = `Consistency..token.`, 
-    REG          = Regularity, 
-    NS           = Stroke,
-    HD           = Homophone.Density, 
-    Fami         = Familiarity, 
-    SAR          = Semantic.Ambiguity.Rating
-  ) %>% 
-  subset(select = sel_Chang_cols)
-
-DF <- merge(
-  x = DF, y = DF_temp, by = "Char", all.x = TRUE)
-  ### 1738 char overlap
-
-rm(DF_temp)
-
-# DF_temp.2 <- readxl::read_excel(
-#   file.path("Data", "Chang_et_al", "Chang_Lee_2020.xlsx"))
-# 
-# DF_temp.2 <- DF_temp.2 %>% 
-#   dplyr::distinct(character, .keep_all = TRUE)
-#
-# ### only 1353 characters!
-
-## Add features of single characters -- Liu et al. (2007) ----------------------
-
-DF_temp <- readxl::read_excel(
-  file.path("Data", "Liu_et_al_2007.xlsx"))
-  ### 2355 char
-
-sel_Liu_cols <- c(
+cols.from.Liu <- c(
   "Char", "CF", "PF", "Fami.2", "Imag", "Conc", "NM")
 
-DF_temp <- DF_temp %>% 
-  dplyr::rename(
-    Char   = Word, 
-    Fami.2 = FAM, 
-    Imag   = IMG, 
-    Conc   = CON
-  ) %>% 
-  subset(select = sel_Liu_cols)
-
-DF <- merge(
-  x = DF, y = DF_temp, by = "Char", all.x = TRUE)
-  ### 1281 char overlap
-
-rm(DF_temp)
-
-## Further processing ----------------------------------------------------------
-
-DF <- DF %>% 
-  dplyr::mutate(
-    P.Reg = as.factor(ifelse(REG == 1, 1, 0)), # assign 1 if regular (1); otherwise assign 0.
-    P.Unp = as.factor(ifelse(REG == 2, 1, 0))  # assign 1 if unpronounceable (2); otherwise assign 0.
-  )
-
-col_names <- c(
+cols.out <- c(
   "SID", "Sex", "Age_month", "Grade", # "Score", 
   "Char", "Correct", 
   "NS", "logF", "Freq", # "CF", "PF", 
@@ -161,100 +39,234 @@ col_names <- c(
   "Conc", "Fami.2", "Fami", "NM"
 )
 
-DF <- DF %>% 
+## Setup paths -----------------------------------------------------------------
+
+if ( server == "local" ) {
+  setwd("C:/Users/PinWei/my_Haskins_project")
+  NTNU.naming <- file.path(
+    "Data", "NTNU", "RawTable_cleaned.xlsx")
+  Hsieh.et.al <- file.path(
+    "Data", "Hsieh_family_semantic_consistency.csv")
+  my.w2v <- file.path(
+    "Data", "char_consistency_metrics_w2v.xlsx")
+  my.GloVe <- file.path(
+    "Data", "char_consistency_metrics_GloVe.xlsx")
+  my.DSG <- file.path(
+    "Data", "char_consistency_metrics_DSG.xlsx")
+  Chang.et.al <- file.path(
+    "Data", "Chang_et_al", "Chang_Lee_2016.csv")
+  Liu.et.al <- file.path(
+    "Data", "Liu_et_al_2007.xlsx")
+  Output.char.DF <- file.path(
+    "Data", "NTNU", "char_DF.xlsx")
+  Output.all.noz <- file.path(
+    "Data", "NTNU", "Data_all.RData")
+  Output.clean.noz <- file.path(
+    "Data", "NTNU", "Data_clean.RData")
+
+} else { # "remote"
+  setwd("/media/data2/pinwei/Haskins_project")
+  NTNU.naming <- file.path(
+    "Data_single_characters", "NTNU", "RawTable_cleaned.xlsx")
+  Hsieh.et.al <- file.path(
+    "Data_single_characters", "Hsieh_family_semantic_consistency.csv")
+  my.w2v <- file.path(
+    "SC_matrices", "char_consistency_metrics_w2v.xlsx")
+  my.GloVe <- file.path(
+    "SC_matrices", "char_consistency_metrics_GloVe.xlsx")
+  my.DSG <- file.path(
+    "SC_matrices", "char_consistency_metrics_DSG.xlsx")
+  Chang.et.al <- file.path(
+    "Data_single_characters", "Chang_Lee_2016.csv")
+  Liu.et.al <- file.path(
+    "Data_single_characters", "Liu_et_al_2007.xlsx")
+  Output.char.DF <- file.path(
+    "Data_single_characters", "NTNU", "char_DF.xlsx")
+  Output.all.noz <- file.path(
+    "Data_single_characters", "NTNU", "Data_all.RData")
+  Output.clean.noz <- file.path(
+    "Data_single_characters", "NTNU", "Data_clean.RData")
+}
+
+## Load data -------------------------------------------------------------------
+
+DF.NTNU.wide <- readxl::read_excel(NTNU.naming) %>% 
+  dplyr::mutate(
+    Sex = ifelse(Sex == 1, "F", "M")) %>% 
+  subset(
+    Screen == 1) %>% 
+  subset(
+    select = -c(Screen, `著...828`, `著...1974`)) 
+
+DF.NTNU <- DF.NTNU.wide %>% 
+  reshape2::melt(
+    id = c("SID", "Grade", "Sex", "Age_month", "Score"), 
+    variable.name = "Char", 
+    value.name = "Correct") %>% 
+  dplyr::mutate(
+    dplyr::across( 
+      .cols = all_of(c("Grade", "Sex", "Correct")),
+      .fns  = as.factor))
+
+DF.NTNU$Char <- as.character(DF.NTNU$Char)
+
+DF.Hsieh <- read.csv(Hsieh.et.al) %>% # 5675 char
+  dplyr::rename(
+    Char         = character,
+    OS.Con.type  = cons_type_PG,
+    OS.Con.token = cons_token_PG
+  ) %>%
+  subset(select = cols.from.Hsieh)
+
+# DF.w2v <- readxl::read_excel(my.w2v) %>% 
+#   dplyr::rename(
+#     OSC.w2v = Se.Sim.Mean
+#   ) %>% 
+#   subset(select = c("Char", "OSC.w2v"))
+# 
+# DF.GloVe <- readxl::read_excel(my.GloVe) %>% 
+#   dplyr::rename(
+#     OSC.GloVe = Se.Sim.Mean
+#   ) %>% 
+#   subset(select = c("Char", "OSC.GloVe"))
+# 
+# DF.DSG <- readxl::read_excel(my.DSG) %>% 
+#   dplyr::rename(
+#     OSC.DSG = Se.Sim.Mean
+#   ) %>% 
+#   subset(select = c("Char", "OSC.DSG"))
+
+DF.Chang <- read.csv(Chang.et.al) %>% # 3314 char
+  dplyr::rename(
+    Char         = Character, 
+    Freq         = Frequency, 
+    OP.Con.type  = `Consistency..type.`, 
+    OP.Con.token = `Consistency..token.`, 
+    REG          = Regularity, 
+    NS           = Stroke,
+    HD           = Homophone.Density, 
+    Fami         = Familiarity, 
+    SAR          = Semantic.Ambiguity.Rating
+  ) %>% 
+  subset(select = cols.from.Chang)
+
+DF.Liu <- readxl::read_excel(Liu.et.al) %>% # 2355 char
+  dplyr::rename(
+    Char   = Word, 
+    Fami.2 = FAM, 
+    Imag   = IMG, 
+    Conc   = CON
+  ) %>% 
+  subset(select = cols.from.Liu)
+
+## Merge dataframes ------------------------------------------------------------
+
+DF.out <- list(
+    DF.NTNU, DF.Hsieh, # DF.w2v, DF.GloVe, DF.DSG
+    DF.Chang, DF.Liu
+  ) %>% 
+  purrr::reduce(
+    dplyr::left_join, by = "Char"
+  ) 
+
+rm(list = c("DF.NTNU", "DF.Hsieh", "DF.Chang", "DF.Liu"))
+
+## Perform further processing --------------------------------------------------
+
+DF.out <- DF.out %>% 
+  dplyr::mutate(
+    P.Reg = as.factor(ifelse(REG == 1, 1, 0)), # assign 1 if regular (1); otherwise assign 0.
+    P.Unp = as.factor(ifelse(REG == 2, 1, 0))  # assign 1 if unpronounceable (2); otherwise assign 0.
+  ) %>% 
   group_by(SID) %>% 
   dplyr::mutate(
-    logF = log(Freq)) %>% 
-  dplyr::select(all_of(col_names)) %>% 
-  ungroup() 
+    logF = log(Freq)
+  ) %>% 
+  ungroup() %>% 
+  dplyr::select(
+    all_of(cols.out))
 
-DF.clean <- DF %>% 
+## Only keep chars that have all the specified features ------------------------
+
+DF.out.clean <- DF.out %>% 
   tidyr::drop_na() # remain 693 char
- 
-# DF %>% 
-#   tidyr::drop_na(all_of(c(
-#     "OS.Con.type", # sel_Hsieh_cols
-#     "OP.Con.type", # sel_Chang_cols
-#     "Imag" # sel_Liu_cols
-#     ))) %>% 
-#   pull(Char) %>% 
-#   unique() %>% 
-#   length()
 
-## use other trials to caculate naming score:
+## Compute number of overlapped characters:
+# DF.out.clean <- DF.out %>%
+#     tidyr::drop_na(all_of(c(
+#       "OS.Con.type", # cols.from.Hsieh
+#       "OP.Con.type", # cols.from.Chang
+#       "Imag" # cols.from.Liu
+#       ))) %>%
+#     pull(Char) %>%
+#     unique() %>%
+#     length()
 
-char_list <- unique(DF.clean$Char)
+## Save these information-complete characters ----------------------------------
 
-DF.score <- DF.wide %>% 
-  dplyr::select(
-    -all_of(char_list)) %>% 
-  dplyr::mutate(
-    Score = rowSums(across(
-      -c("SID", "Sex", "Age_month", "Grade", "Score")
-      ))) %>% 
-  dplyr::select(
-    all_of(c("SID", "Score")))
-
-DF <- merge(
-  x = DF, y = DF.score, by = "SID", all.x = TRUE)
-
-DF.else <- merge(
-  x = DF, y = DF.score, by = "SID", all.x = TRUE)
-
-## z-scoring:
-
-cols_to_z <- col_names[! col_names %in% c(
-  "SID", "Sex", "Age_month", "Grade", "Score", 
-  "Char", "Correct", "P.Reg", "P.Unp")]
-
-DF.z <- DF %>% 
-  group_by(SID) %>% 
-  dplyr::mutate(across(
-    .cols = all_of(cols_to_z),
-    .fns = ~ (.x - mean(.x, na.rm = TRUE)) / sd(.x, na.rm = TRUE)
-  )) %>% 
-  ungroup() 
-
-DF.clean.z <- DF.clean %>% 
-  group_by(SID) %>% 
-  dplyr::mutate(across(
-    .cols = all_of(cols_to_z),
-    .fns = ~ (.x - mean(.x, na.rm = TRUE)) / sd(.x, na.rm = TRUE)
-  )) %>% 
-  ungroup() 
-
-DF.else <- DF %>% 
-  subset(! Char %in% char_list)
-
-DF.else.z <- DF.else %>% 
-  group_by(SID) %>% 
-  dplyr::mutate(across(
-    .cols = all_of(cols_to_z),
-    .fns = ~ (.x - mean(.x, na.rm = TRUE)) / sd(.x, na.rm = TRUE)
-  )) %>% 
-  ungroup() 
-
-## Save to files ---------------------------------------------------------------
-
-save(DF, 
-     file = output.all.path)
-
-save(DF.clean, 
-     file = output.clean.path)
-
-save(DF.z, 
-     file = gsub(".RData", ".z.RData", output.all.path))
-
-save(DF.clean.z, 
-     file = gsub(".RData", ".z.RData", output.clean.path))
+char_list <- unique(DF.out.clean$Char)
 
 write.table(char_list, 
             file.path(top.dir, "char_list.txt"), 
             sep = "\n", quote = FALSE, 
             row.names = FALSE, col.names = FALSE)
 
-save(DF.else, 
-     file = gsub("_all.RData", "_else.RData", output.all.path))
+char.DF <- DF.out.clean %>% 
+  dplyr::select(-all_of(
+    c("SID", "Sex", "Age_month", "Grade", "Correct")
+  )) %>% 
+  dplyr::distinct(
+    Char, .keep_all = TRUE)
 
-save(DF.else.z, 
-     file = gsub("_all.RData", "_else.z.RData", output.all.path))
+writexl::write_xlsx(char.DF, Output.char.DF)
+
+## Use other characters to calculate naming score ------------------------------
+
+DF.NTNU.score <- DF.NTNU.wide %>% 
+  dplyr::select(
+    -all_of(char_list)) %>% 
+  dplyr::mutate(
+    Score = rowSums(across(
+      -c("SID", "Sex", "Age_month", "Grade", "Score")
+    ))) %>% 
+  dplyr::select(
+    all_of(c("SID", "Score")))
+
+## Save the original versions --------------------------------------------------
+
+DF.out <- dplyr::left_join(
+  x = DF.out, y = DF.NTNU.score, by = "SID")
+
+save(DF.out, file = Output.all.noz)
+
+DF.out.clean <- dplyr::left_join(
+  x = DF.out.clean, y = DF.NTNU.score, by = "SID")
+
+save(DF.out.clean, file = Output.clean.noz)
+
+## Save the z-scored versions --------------------------------------------------
+
+cols_to_z <- cols.out[! cols.out %in% c(
+  "SID", "Sex", "Age_month", "Grade", "Score", 
+  "Char", "Correct", "P.Reg", "P.Unp"
+)]
+
+DF.out.z <- DF.out %>% 
+  group_by(SID) %>% 
+  dplyr::mutate(across(
+    .cols = all_of(cols_to_z),
+    .fns = ~ (.x - mean(.x, na.rm = TRUE)) / sd(.x, na.rm = TRUE)
+  )) %>% 
+  ungroup() 
+
+save(DF.out.z, file = gsub(".RData", ".z.RData", Output.all.noz))
+
+DF.out.clean.z <- DF.out.clean %>% 
+  group_by(SID) %>% 
+  dplyr::mutate(across(
+    .cols = all_of(cols_to_z),
+    .fns = ~ (.x - mean(.x, na.rm = TRUE)) / sd(.x, na.rm = TRUE)
+  )) %>% 
+  ungroup() 
+
+save(DF.out.clean.z, file = gsub(".RData", ".z.RData", Output.clean.noz))

@@ -12,7 +12,9 @@ library(openxlsx)
 
 ## Variables -------------------------------------------------------------------
 
-server <- c("local", "remote")[1]
+server <- c("local", "remote")[
+  as.integer(readline("Local [1] or remote [2]: "))
+]
 
 fn <- c(
   "Data_all.RData", 
