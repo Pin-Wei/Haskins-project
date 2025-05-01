@@ -1,5 +1,4 @@
 rm(list = ls())
-setwd("C:/Users/PinWei/my_Haskins_project")
 
 library(readxl)
 library(dplyr)
@@ -19,14 +18,22 @@ var.list <- c(
   "LogCF", "NS", "CON", "PC", "SC", "SAR", "IMG", "AoA"
 )
 
+server <- c("local", "remote")[
+  as.integer(readline("Local [1] or remote [2]: "))
+]
+
 ## Setup directories -----------------------------------------------------------
 
-input.folder <- file.path(
-  "Data", "Chang_et_al"
-)
-out.folder <- file.path(
-  "Stats", "Chang_et_al", "Compare with CSR"
-)
+if ( server == "local" ) {
+  setwd("C:/Users/PinWei/my_Haskins_project")
+  input.folder <- file.path("Data", "Chang_et_al")
+  out.folder <- file.path("Stats", "Chang_et_al", "Compare with CSR")
+} else { # "remote"
+  setwd("/media/data2/pinwei/Haskins_project")
+  input.folder <- file.path("Data_single_characters")
+  out.folder <- file.path("Stats_Chang", "Compare with CSR")
+}
+  
 if ( ! file.exists(out.folder)) { 
   dir.create(out.folder, recursive=TRUE) 
 }
