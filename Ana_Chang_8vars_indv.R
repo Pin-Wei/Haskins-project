@@ -1,7 +1,5 @@
 rm(list = ls())
 
-# source("Ana_Chang_allvars_Indv.R")
-
 library(readxl)
 library(dplyr)
 library(tidyr)
@@ -36,12 +34,12 @@ if ( server == "local" ) {
   setwd("C:/Users/PinWei/my_Haskins_project")
   data.dir <- file.path("Data", "Chang_et_al")
   data.path <- file.path(data.dir, "Chang_Lee_2020_z.xlsx")
-  stats.outdir <- file.path("Stats", "Chang_et_al")
+  stats.outdir <- file.path("Stats", "Chang_et_al", "Compare with CSR")
   
 } else { # "remote"
   setwd("/media/data2/pinwei/Haskins_project")
   data.path <- file.path("Data_single_characters", "Chang_Lee_2020_z.xlsx")
-  stats.outdir <- file.path("Stats_Chang")
+  stats.outdir <- file.path("Stats_Chang", "Compare with CSR")
 }
 
 if ( ! file.exists(stats.outdir)) { 
@@ -108,8 +106,6 @@ write.csv(
     "LogLik", "R2m", "R2c", "AIC", "AICc", "BIC"
   )], 
   file = file.path(stats.outdir, paste0(
-    "[", task.type, 
-    "] all 8 variables using Indv data (", 
-    mdl.type, ").csv")), 
+    "[", mdl.type, "] ", task.type, ".z_RT ~ 8 vars (per participant).csv")), 
   row.names = F
 )

@@ -7,7 +7,7 @@ library(writexl)
 
 setwd("C:/Users/PinWei/my_Haskins_project/")
 
-z <- 2
+z <- 1
 
 data.path <- file.path(
   "Data", "Chang_et_al", 

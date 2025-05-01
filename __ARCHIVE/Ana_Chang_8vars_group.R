@@ -1,7 +1,5 @@
 rm(list = ls())
 
-# source("Ana_Chang_allvars.R")
-
 library(readxl)
 library(dplyr)
 library(tidyr)
@@ -18,7 +16,7 @@ library(MuMIn)
 
 task.type <- c("Naming", "LD")[1]
 
-mdl.type <- c("GLM", "GLMM")[2]
+mdl.type <- c("lm", "lmer")[2]
 
 dv <- "z_rt"
 
@@ -34,33 +32,35 @@ if ( server == "local" ) {
   setwd("C:/Users/PinWei/my_Haskins_project")
   data.dir <- file.path("Data", "Chang_et_al")
   data.path <- file.path(data.dir, "Chang_Lee_2020_z.xlsx")
-  stats.outdir <- file.path("Stats", "Chang_et_al")
+  stats.outdir <- file.path("Stats", "Chang_et_al", 
+                            paste0("[", mdl.type, "] z_RT ~ 8 vars"))
   
 } else { # "remote"
   setwd("/media/data2/pinwei/Haskins_project")
   data.path <- file.path("Data_single_characters", "Chang_Lee_2020_z.xlsx")
-  stats.outdir <- file.path("Stats_Chang")
+  stats.outdir <- file.path("Stats_Chang", 
+                            paste0("[", mdl.type, "] z_RT ~ 8 vars"))
 }
 
 if ( ! file.exists(stats.outdir)) { 
   dir.create(stats.outdir, recursive=TRUE) }
 
 stats.out.fn <- paste0(
-  "[", task.type, "] all 8 variables (", mdl.type, ").txt")
+  "[", task.type, "] all 8 vars (group).txt")
 
 ## Load data and run regression model ------------------------------------------
 
 ana.data <- readxl::read_excel(data.path) %>% 
   subset(task == task.type)
 
-if ( mdl.type == "GLM" ) {
+if ( mdl.type == "lm" ) {
   
   formula <- as.formula(paste(
     dv, "~", paste(var_list, collapse = " + ")))
     
   mdl <- lm(formula, data = ana.data)
   
-} else if ( mdl.type == "GLMM") {
+} else if ( mdl.type == "lmer") {
   
   formula <- as.formula(paste(
     dv, "~", paste(var_list, collapse = " + "), 

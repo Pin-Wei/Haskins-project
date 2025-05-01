@@ -63,11 +63,11 @@ formula <- as.formula(paste0(
 
 mdl <- lmer(formula, data = ana.data)
 
-stat.fn <- paste0("LME modeling for zRT in ", task, ".txt")
+stat.fn <- paste0("[", task, "] zRT ~ ", length(var.list), " vars.txt")
 
 writeLines(capture.output(
   summary(mdl)), 
-  con = file.path(stats.out.top, stat.fn))
+  con = file.path(stats.out.top, "lmer", stat.fn))
 
 ## [old] Load data and define variables ----------------------------------------------
 

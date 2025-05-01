@@ -15,7 +15,7 @@ setwd("C:/Users/PinWei/my_Haskins_project/")
 data.dir <- file.path("Data", "Chang_et_al")
 data.path <- file.path(data.dir, "Chang_Lee_2020_z.xlsx")
 
-stats.outdir <- file.path("Stats", "Chang_et_al")
+stats.outdir <- file.path("Stats", "Chang_et_al", "[lmer] z_RT ~ O x P x S")
 if ( ! file.exists(stats.outdir)) { 
   dir.create(stats.outdir, recursive=TRUE) }
 
