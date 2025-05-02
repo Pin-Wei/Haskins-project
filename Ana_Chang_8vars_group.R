@@ -18,9 +18,15 @@ var.list <- c(
   "LogCF", "NS", "CON", "PC", "SC", "SAR", "IMG", "AoA"
 )
 
-server <- c("local", "remote")[
-  as.integer(readline("Local [1] or remote [2]: "))
-]
+mdl.type <- c(
+  "CSR", "GLM"
+)[as.integer(readline(
+  "CSR [1] or GLM/GLMM [2]: "
+))]
+
+server <- c("local", "remote")[as.integer(readline(
+  "Local [1] or remote [2]: "
+))]
 
 ## Setup directories -----------------------------------------------------------
 
@@ -42,30 +48,53 @@ if ( ! file.exists(out.folder)) {
 
 for ( x in 1:2 ) {
   
-  data <- readxl::read_excel(
-    file.path(input.folder, c(
+  input.data <- readxl::read_excel(file.path(
+    input.folder, c(
       "Chang_2020_z_CSR.xlsx", "Chang_2016_z_CSR.xlsx"
-    )[x]))
+    )[x]
+  ))
+
+  input.note <- c("trial-wise", "mean")[x]
   
   dv <- c("RT", "mean_RT")[x]
   
-  formula.add <- c(
-    paste0("+ (1 + ", paste(var.list, collapse = " + "), " | subject_id)"), ""
-  )[x]
-  
-  formula <- as.formula(paste(
-    dv, "~", paste(var.list, collapse = " + "), 
-    "+ (1 | Char)", formula.add
-  ))
-  
-  mdl <- lme4::lmer(formula = formula, 
-                    data = data, 
-                    REML = FALSE, 
-                    na.action = na.exclude, 
-                    verbose = 1)
+  if ( mdl.type == "CSR" ) {
+    
+    formula <- as.formula(paste(
+      dv, "~", paste(var.list, collapse = " + "), # linear terms
+      "+", paste0("I(", var.list, "^2)", collapse = " + "), # quadratic terms
+      "+", paste(combn(var.list, 2, function(x) paste(x, collapse = " * ")), collapse = " + ") # interaction terms
+    ))
+    
+    mdl <- lm(formula, data = input.data)
+    
+  } else if (( mdl.type == "GLM" ) & ( x == 1 )) {
+    
+    mdl.type <- "GLMM"
+    
+    formula <- as.formula(paste(
+      dv, "~", paste(var.list, collapse = " + "), 
+      "+ (1 | Char) + (1 +", paste(var.list, collapse = " + "), "| subject_id)"
+    ))
+    
+    mdl <- lme4::lmer(formula = formula, 
+                      data = input.data, 
+                      REML = FALSE, 
+                      na.action = na.exclude, 
+                      verbose = 1)
+    
+  } else { # ( mdl.type == "GLM" ) & ( x == 2 )
+    
+    formula <- as.formula(paste(
+      dv, "~", paste(var.list, collapse = " + ")
+    ))
+    
+    mdl <- lm(formula, data = input.data)
+  }
   
   out.fn.txt <- paste0(
-    "[GLMM] Naming.", dv, " ~ 8 vars (group-level).txt")
+    "[", mdl.type, "] Naming.", dv, " ~ 8 vars (group-level ", input.note, ").txt"
+  )
   
   writeLines(
     c(
