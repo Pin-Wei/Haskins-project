@@ -3,14 +3,14 @@ rm(list = ls())
 library(readxl)
 library(dplyr)
 library(tidyr)
-library(lme4)
+# library(lme4)
 library(lmerTest) 
 library(stargazer)
-library(jtools)
+# library(jtools)
 library(car)
 library(stats)
-library(openxlsx)
 library(MuMIn)
+library(openxlsx)
 
 ## Variables -------------------------------------------------------------------
 
@@ -60,13 +60,14 @@ for ( x in 1:2 ) {
   
   if ( mdl.type == "CSR" ) {
     
-    formula <- as.formula(paste(
-      dv, "~", paste(var.list, collapse = " + "), # linear terms
-      "+", paste0("I(", var.list, "^2)", collapse = " + "), # quadratic terms
-      "+", paste(combn(var.list, 2, function(x) paste(x, collapse = " * ")), collapse = " + ") # interaction terms
-    ))
-    
-    mdl <- lm(formula, data = input.data)
+    mdl <- lm(
+      formula = as.formula(paste(
+        dv, "~", paste(var.list, collapse = " + "), # linear terms
+        "+", paste0("I(", var.list, "^2)", collapse = " + "), # quadratic terms
+        "+", paste(combn(var.list, 2, function(x) paste(x, collapse = " * ")), collapse = " + ") # interaction terms
+      )), 
+      data = input.data
+    )
     
   } else if (( mdl.type == "GLM" ) & ( x == 1 )) {
     
@@ -77,19 +78,20 @@ for ( x in 1:2 ) {
       "+ (1 | Char) + (1 +", paste(var.list, collapse = " + "), "| subject_id)"
     ))
     
-    mdl <- lme4::lmer(formula = formula, 
-                      data = input.data, 
-                      REML = FALSE, 
-                      na.action = na.exclude, 
-                      verbose = 1)
+    mdl <- lmerTest::lmer(formula = formula, 
+                          data = input.data, 
+                          REML = FALSE, 
+                          na.action = na.exclude, 
+                          verbose = 1)
     
   } else { # ( mdl.type == "GLM" ) & ( x == 2 )
     
-    formula <- as.formula(paste(
-      dv, "~", paste(var.list, collapse = " + ")
-    ))
-    
-    mdl <- lm(formula, data = input.data)
+    mdl <- lm(
+      formula = as.formula(paste(
+        dv, "~", paste(var.list, collapse = " + ")
+      )), 
+      data = input.data
+    )
   }
   
   out.fn.txt <- paste0(
