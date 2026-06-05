@@ -3,107 +3,122 @@ rm(list = ls())
 library(readxl)
 library(dplyr)
 library(tidyr)
-library(lme4)
+# library(lme4)
 library(lmerTest) 
 library(stargazer)
-library(jtools)
+# library(jtools)
 library(car)
 library(stats)
-library(openxlsx)
 library(MuMIn)
+library(openxlsx)
 
 ## Variables -------------------------------------------------------------------
 
-task.type <- c("Naming", "LD")[1]
+var.list <- c(
+  "LogCF", "NS", "CON", "PC", "SC", "SAR", "IMG", "AoA"
+)
 
-mdl.type <- c("lm", "lmer")[2]
+mdl.type <- c(
+  "CSR", "GLM"
+)[as.integer(readline(
+  "CSR [1] or GLM/GLMM [2]: "
+))]
 
-dv <- "z_rt"
-
-var_list <- c("LogCF", "NS", "CON", "PC", "SAR", "IMG", "SC", "AoA")
-
-server <- c("local", "remote")[
-  as.integer(readline("Local [1] or remote [2]: "))
-]
+server <- c("local", "remote")[as.integer(readline(
+  "Local [1] or remote [2]: "
+))]
 
 ## Setup directories -----------------------------------------------------------
 
 if ( server == "local" ) {
   setwd("C:/Users/PinWei/my_Haskins_project")
-  data.dir <- file.path("Data", "Chang_et_al")
-  data.path <- file.path(data.dir, "Chang_Lee_2020_z.xlsx")
-  stats.outdir <- file.path("Stats", "Chang_et_al", 
-                            paste0("[", mdl.type, "] z_RT ~ 8 vars"))
-  
+  input.folder <- file.path("Data", "Chang_et_al")
+  out.folder <- file.path("Stats", "Chang_et_al", "Compare with CSR")
 } else { # "remote"
   setwd("/media/data2/pinwei/Haskins_project")
-  data.path <- file.path("Data_single_characters", "Chang_Lee_2020_z.xlsx")
-  stats.outdir <- file.path("Stats_Chang", 
-                            paste0("[", mdl.type, "] z_RT ~ 8 vars"))
+  input.folder <- file.path("Data_single_characters")
+  out.folder <- file.path("Stats_Chang", "Compare with CSR")
 }
-
-if ( ! file.exists(stats.outdir)) { 
-  dir.create(stats.outdir, recursive=TRUE) }
-
-stats.out.fn <- paste0(
-  "[", task.type, "] all 8 vars (group).txt")
+  
+if ( ! file.exists(out.folder)) { 
+  dir.create(out.folder, recursive=TRUE) 
+}
 
 ## Load data and run regression model ------------------------------------------
 
-ana.data <- readxl::read_excel(data.path) %>% 
-  subset(task == task.type)
-
-if ( mdl.type == "lm" ) {
+for ( x in 1:2 ) {
   
-  formula <- as.formula(paste(
-    dv, "~", paste(var_list, collapse = " + ")))
+  input.data <- readxl::read_excel(file.path(
+    input.folder, c(
+      "Chang_2020_z_CSR.xlsx", "Chang_2016_z_CSR.xlsx"
+    )[x]
+  ))
+
+  input.note <- c("trial-wise", "mean")[x]
+  
+  dv <- c("RT", "mean_RT")[x]
+  
+  if ( mdl.type == "CSR" ) {
     
-  mdl <- lm(formula, data = ana.data)
+    mdl <- lm(
+      formula = as.formula(paste(
+        dv, "~", paste(var.list, collapse = " + "), # linear terms
+        "+", paste0("I(", var.list, "^2)", collapse = " + "), # quadratic terms
+        "+", paste(combn(var.list, 2, function(x) paste(x, collapse = " * ")), collapse = " + ") # interaction terms
+      )), 
+      data = input.data
+    )
+    
+  } else if (( mdl.type == "GLM" ) & ( x == 1 )) {
+    
+    mdl.type <- "GLMM"
+    
+    formula <- as.formula(paste(
+      dv, "~", paste(var.list, collapse = " + "), 
+      "+ (1 | Char) + (1 +", paste(var.list, collapse = " + "), "| subject_id)"
+    ))
+    
+    mdl <- lmerTest::lmer(formula = formula, 
+                          data = input.data, 
+                          REML = FALSE, 
+                          na.action = na.exclude, 
+                          verbose = 1)
+    
+  } else { # ( mdl.type == "GLM" ) & ( x == 2 )
+    
+    mdl <- lm(
+      formula = as.formula(paste(
+        dv, "~", paste(var.list, collapse = " + ")
+      )), 
+      data = input.data
+    )
+  }
   
-} else if ( mdl.type == "lmer") {
+  out.fn.txt <- paste0(
+    "[", mdl.type, "] Naming.", dv, " ~ 8 vars (group-level ", input.note, ").txt"
+  )
   
-  formula <- as.formula(paste(
-    dv, "~", paste(var_list, collapse = " + "), 
-    "+ (1 | item)", 
-    "+ (1 +", paste(var_list, collapse = " + "), " | subject_id)"))
+  writeLines(
+    c(
+      capture.output(summary(mdl)), 
+      capture.output(MuMIn::r.squaredGLMM(mdl)), 
+      "", 
+      paste("AIC:", stats::AIC(mdl)), 
+      paste("BIC:", stats::BIC(mdl))
+    ), 
+    con = file.path(out.folder, out.fn.txt)
+  )
   
-  mdl <- lme4::lmer(formula = formula, 
-                    data = ana.data, 
-                    REML = FALSE, 
-                    na.action = na.exclude, 
-                    verbose = 1)
+  wb <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(wb, "Model Summary")
+  openxlsx::writeData(wb, sheet = "Model Summary", 
+                      x = stargazer(mdl, 
+                                    align = TRUE, 
+                                    type = "text"))
+  openxlsx::addWorksheet(wb, "VIF")
+  openxlsx::writeData(wb, sheet = "VIF", 
+                      x = capture.output(car::vif(mdl)))
+  openxlsx::saveWorkbook(wb, 
+                         file.path(out.folder, gsub(".txt", ".xlsx", out.fn.txt)), 
+                         overwrite = TRUE)
 }
-
-## Save to files ---------------------------------------------------------------
-
-saveRDS(mdl, file = file.path(stats.outdir, 
-                              paste0(mdl.type, ".rds")))
-
-writeLines(
-  c(
-    capture.output(summary(mdl)), 
-    capture.output(MuMIn::r.squaredGLMM(mdl)), 
-    "", 
-    paste("AIC:", stats::AIC(mdl)), 
-    paste("BIC:", stats::BIC(mdl))
-  ), 
-  con = file.path(stats.outdir, stats.out.fn)
-)
-
-# writeLines(capture.output(jtools::summ(mdl, vifs = TRUE)), 
-#            con = file.path(stats.outdir, 
-#                            gsub(",txt", " (2),txt", stats.out.fn)))
-
-wb <- openxlsx::createWorkbook()
-openxlsx::addWorksheet(wb, "Model Summary")
-openxlsx::writeData(wb, sheet = "Model Summary", 
-                    x = stargazer(mdl, 
-                                  align = TRUE, 
-                                  type = "text"))
-openxlsx::addWorksheet(wb, "VIF")
-openxlsx::writeData(wb, sheet = "VIF", 
-                    x = capture.output(car::vif(mdl)))
-openxlsx::saveWorkbook(wb, 
-                       file.path(stats.outdir, gsub(".txt", ".xlsx", stats.out.fn)), 
-                       overwrite = TRUE)
-
